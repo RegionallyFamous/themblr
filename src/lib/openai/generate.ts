@@ -8,30 +8,6 @@ let client: OpenAI | null = null;
 const MAX_MODEL_ATTEMPTS = 2;
 const RETRY_DELAYS_MS = [700, 1500];
 
-const DESIGN_QUALITY_RULES = [
-  "Establish one clear visual direction and apply it consistently.",
-  "Create strong hierarchy through typography scale, spacing rhythm, and section contrast.",
-  "Keep long-form reading comfortable (body size around 16px+, robust line-height, clear paragraph spacing).",
-  "Use high-contrast palette choices so text/action controls remain legible.",
-  "Style interactive states for links and buttons, including :focus-visible states.",
-  "Tune responsive behavior for desktop and mobile without flattening hierarchy.",
-];
-
-const TUMBLR_THEME_RULES = [
-  "Preserve readability of post content, metadata, tags, and reblog trails.",
-  "Keep navigation, pagination, and post actions visually obvious.",
-  "Do not add external runtime dependencies.",
-  "Do not remove or break Tumblr template variables/blocks in editable regions.",
-];
-
-interface DirectionProfile {
-  name: string;
-  palette: string;
-  typography: string;
-  components: string;
-  motion: string;
-}
-
 function getClient(): OpenAI {
   const env = getEnv();
   if (!env.openAiApiKey) {
@@ -57,78 +33,45 @@ function hasAnyKeyword(source: string, keywords: string[]): boolean {
   return keywords.some((keyword) => source.includes(keyword));
 }
 
-function selectDirectionProfile(request: GenerateRequest): DirectionProfile {
+function selectDirectionProfile(request: GenerateRequest): string {
   const source = `${request.themeName} ${request.structured.tone} ${request.structured.paletteHint} ${request.prompt}`.toLowerCase();
 
   if (hasAnyKeyword(source, ["neo brutal", "neo-brutal", "brutal", "brutalism"])) {
-    return {
-      name: "Neo Brutalist",
-      palette: "High-contrast primaries with bold accent blocks and strong border separation.",
-      typography: "Heavy, assertive headings paired with highly readable body text.",
-      components: "Hard-edged cards, thick outlines, offset shadows, loud action buttons, visible chips/tags.",
-      motion: "Minimal but punchy transitions; avoid subtle/soft styling.",
-    };
+    return "Neo Brutalist: hard edges, thick borders, assertive type, high contrast.";
   }
 
   if (hasAnyKeyword(source, ["editorial", "magazine", "serif", "literary"])) {
-    return {
-      name: "Editorial",
-      palette: "Refined neutral surfaces with one restrained accent.",
-      typography: "Expressive serif headlines with balanced body rhythm and metadata contrast.",
-      components: "Clean modules, elegant rules/dividers, strong spacing cadence and post legibility.",
-      motion: "Gentle, low-amplitude transitions that support reading flow.",
-    };
+    return "Editorial: refined contrast, clean modules, strong reading rhythm.";
   }
 
   if (hasAnyKeyword(source, ["cyber", "tech", "terminal", "futur", "digital"])) {
-    return {
-      name: "Tech Grid",
-      palette: "Cool or dark-leaning surfaces with luminous accent tones and clear state colors.",
-      typography: "Structured headline scale with compact utility/meta type treatment.",
-      components: "Grid-forward cards, data-like chips, precise controls, strong media framing.",
-      motion: "Crisp motion and transforms with reduced-motion-safe fallback.",
-    };
+    return "Tech Grid: precise layout, crisp controls, luminous accent on restrained surfaces.";
   }
 
   if (hasAnyKeyword(source, ["playful", "fun", "cute", "pastel", "collage"])) {
-    return {
-      name: "Playful Collage",
-      palette: "Layered warm/cool palette with strong contrast anchors.",
-      typography: "Expressive display headings with simple, legible body text.",
-      components: "Layered surfaces, badge-like tags, vibrant controls, varied module emphasis.",
-      motion: "Lively motion for reveals/hover while preserving usability.",
-    };
+    return "Playful Collage: layered color, expressive headings, energetic accents.";
   }
 
-  return {
-    name: "Modern Content-First",
-    palette: "Balanced base neutrals with a focused accent and clear surface separation.",
-    typography: "Readable body-first system with a distinct heading voice.",
-    components: "Confident cards/modules, polished action controls, and clear post metadata hierarchy.",
-    motion: "Subtle transitions that improve affordance without distraction.",
-  };
+  return "Modern Content-First: strong readability, clear hierarchy, confident components.";
 }
 
 function buildSystemPrompt(reducedScope: boolean): string {
   return [
-    "You are Themblr, an AI art director and front-end engineer editing a Tumblr starter theme.",
+    "You are Themblr, a Tumblr theme style generator.",
     "Return strict JSON only.",
-    "Never modify locked core post rendering behavior.",
-    "Output ONLY this shape:",
+    "Output exactly this shape:",
     "{\"editableZones\":{\"cssCore\":string?,\"headerSection\":string?,\"sidebarSection\":string?,\"contextSection\":string?},\"metaDefaults\":Record<string,string>,\"notes\":string[]}",
     reducedScope
-      ? "Reduced scope is active: only return cssCore and metaDefaults, do not return headerSection/sidebarSection/contextSection."
+      ? "CSS-only mode: return ONLY editableZones.cssCore and optional metaDefaults."
       : "You may return cssCore, headerSection, sidebarSection, and contextSection edits.",
-    "Keep Tumblr tags, blocks, and variables untouched unless they are already in editable sections.",
-    "Do not add external dependencies (no external script src, no external CSS/font cdns).",
-    "Preserve {CustomCSS} marker expectation by not outputting it in cssCore.",
-    "Deliver a polished, clearly distinct result from the starter theme.",
-    "Prioritize high-impact styling changes in tokens, hierarchy, spacing, cards, metadata readability, controls, and typography.",
-    "Quality rules:",
-    ...DESIGN_QUALITY_RULES.map((rule, index) => `${index + 1}. ${rule}`),
-    "Tumblr rules:",
-    ...TUMBLR_THEME_RULES.map((rule, index) => `${index + 1}. ${rule}`),
-    "Never return prose outside JSON.",
+    "Do not output full HTML or full base CSS.",
+    "Do not include external dependencies.",
+    "cssCore must be an additive override patch between 700 and 2800 characters.",
+    "Include :root overrides for --t-bg, --t-surface, --t-text, --t-muted, --t-accent, --t-border, --t-radius, --t-gap, --t-max-post.",
+    "Include visible styling for .site-header, .post-card, .post-meta, .post-actions a, .pagination, and .theme-module.",
+    "Include hover and :focus-visible states.",
+    "Include media queries for 1100px, 780px, and 540px.",
+    "Do not return markdown fences or prose.",
   ].join("\n");
 }
 
@@ -148,51 +91,23 @@ function buildUserPrompt(options: AiGenerateOptions): string {
   const { request, baseEditableZones, violations, reducedScope } = options;
   const direction = selectDirectionProfile(request);
 
-  const cssForPrompt = truncateForPrompt(baseEditableZones.cssCore, 12000);
-  const headerForPrompt = truncateForPrompt(baseEditableZones.headerSection, 1800);
-  const sidebarForPrompt = truncateForPrompt(baseEditableZones.sidebarSection, 1800);
-  const contextForPrompt = truncateForPrompt(baseEditableZones.contextSection, 1800);
+  const cssForPrompt = truncateForPrompt(baseEditableZones.cssCore, 2600);
 
   const zoneSections = [
-    "Base editable zones (truncated for latency; maintain contracts):",
+    "Base CSS excerpt (for selector context only):",
     `<cssCore>\n${cssForPrompt}\n</cssCore>`,
   ];
 
-  if (!reducedScope) {
-    zoneSections.push(
-      `<headerSection>\n${headerForPrompt}\n</headerSection>`,
-      `<sidebarSection>\n${sidebarForPrompt}\n</sidebarSection>`,
-      `<contextSection>\n${contextForPrompt}\n</contextSection>`,
-    );
-  }
-
   return [
     `Theme name: ${request.themeName}`,
-    `Slug: ${request.slug}`,
-    `Tone: ${request.structured.tone}`,
+    `Art direction: ${direction}`,
+    `Tone hint: ${request.structured.tone}`,
     `Palette hint: ${request.structured.paletteHint}`,
-    `Art direction: ${direction.name}`,
-    `Direction palette: ${direction.palette}`,
-    `Direction typography: ${direction.typography}`,
-    `Direction components: ${direction.components}`,
-    `Direction motion: ${direction.motion}`,
-    `Layout: ${request.structured.layout}`,
-    `Post width: ${request.structured.postWidth}`,
-    `Card style: ${request.structured.cardStyle}`,
-    `Header alignment: ${request.structured.headerAlignment}`,
-    `Notes avatar size: ${request.structured.notesAvatarSize}`,
-    `Toggles: ${JSON.stringify(request.structured.toggles)}`,
+    `Layout hint: ${request.structured.layout}, ${request.structured.postWidth}, ${request.structured.cardStyle}`,
     `Creative prompt: ${request.prompt}`,
-    "Distinctness requirement: final look must be noticeably different from Default Era at first glance.",
-    "Mandatory transformation checklist:",
-    "1. Replace token defaults for background/surfaces/text/accent/border with a coherent palette.",
-    "2. Define visible type hierarchy for h1/h2/h3/body/meta and clear spacing rhythm.",
-    "3. Restyle at least five component groups: header/nav, post cards, post meta/actions, tags/chips, pagination, sidebar modules, footer.",
-    "4. Include hover and focus-visible styling for links/buttons.",
-    "5. Provide responsive tuning for 1100px, 780px, and 540px breakpoints.",
-    "6. Avoid superficial changes; do not return tiny cosmetic edits.",
-    reducedScope ? "Reduced scope: true" : "Reduced scope: false",
+    reducedScope ? "Scope: cssCore + metaDefaults only." : "Scope: full editable zones.",
     violations?.length ? `Prior validation violations: ${violations.join(" | ")}` : "Prior validation violations: none",
+    "Output compact overrides only. Do not restate unchanged base rules.",
     ...zoneSections,
   ].join("\n\n");
 }
@@ -242,7 +157,8 @@ async function requestOpenAiJsonForModel(
       const completion = await openai.chat.completions.create(
         {
           model,
-          temperature: 0.85,
+          temperature: 0.6,
+          max_completion_tokens: 2200,
           response_format: { type: "json_object" },
           messages: [
             {
@@ -294,6 +210,32 @@ async function requestOpenAiJsonForModel(
   throw new Error("OpenAI request failed after retries");
 }
 
+function parseLenientJson(raw: string): unknown {
+  const trimmed = raw.trim();
+  const candidates: string[] = [trimmed];
+
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fenced?.[1]) {
+    candidates.push(fenced[1].trim());
+  }
+
+  const firstBrace = trimmed.indexOf("{");
+  const lastBrace = trimmed.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    candidates.push(trimmed.slice(firstBrace, lastBrace + 1));
+  }
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error("OpenAI returned non-JSON output");
+}
+
 export async function generateEditableOverridesWithOpenAI(options: AiGenerateOptions): Promise<AiGeneration> {
   const env = getEnv();
   if (!env.openAiModel) {
@@ -318,12 +260,7 @@ export async function generateEditableOverridesWithOpenAI(options: AiGenerateOpt
     }
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error("OpenAI returned non-JSON output");
-  }
+  const parsed = parseLenientJson(raw);
 
   return AiGenerationSchema.parse(parsed);
 }

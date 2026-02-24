@@ -198,4 +198,16 @@ describe("POST /api/generate", () => {
     expect(payload.error).toBe("OpenAI returned an invalid response format. Retry shortly.");
     expect(payload.requestId).toBeTruthy();
   });
+
+  it("maps non-json model output errors to 502", async () => {
+    mockedGenerateThemeFromStarter.mockRejectedValue(new Error("OpenAI returned non-JSON output"));
+
+    const response = await POST(makeRequest(validGenerateBody()));
+    const payload = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(payload.ok).toBe(false);
+    expect(payload.error).toBe("OpenAI returned an unreadable response. Retry shortly.");
+    expect(payload.requestId).toBeTruthy();
+  });
 });

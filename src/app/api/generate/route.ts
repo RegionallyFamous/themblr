@@ -36,6 +36,13 @@ function mapGenerateError(error: unknown): { status: number; message: string } |
     };
   }
 
+  if (normalizedMessage.includes("openai returned non-json output")) {
+    return {
+      status: 502,
+      message: "OpenAI returned an unreadable response. Retry shortly.",
+    };
+  }
+
   if (error.message.includes("Unable to locate starter theme.html")) {
     return {
       status: 500,

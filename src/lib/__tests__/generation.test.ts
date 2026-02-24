@@ -68,9 +68,14 @@ describe("generateThemeFromStarter", () => {
 
     expect(result.validation.passed).toBe(true);
     expect(result.themeHtml).toContain(".ai-context");
+    expect(mockedGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reducedScope: true,
+      }),
+    );
   });
 
-  it("auto-repairs by reverting risky editable zones and passes", async () => {
+  it("ignores risky non-css editable zones and keeps template structure intact", async () => {
     const starter = await loadStarterThemeFixture();
 
     mockedGenerate.mockResolvedValue({
@@ -90,7 +95,9 @@ describe("generateThemeFromStarter", () => {
     });
 
     expect(result.validation.passed).toBe(true);
-    expect(result.report.lockedRegionsRepaired).toBeGreaterThan(0);
+    expect(result.themeHtml).not.toContain("<header>broken</header>");
+    expect(result.themeHtml).not.toContain("<div>bad</div>");
+    expect(result.report.lockedRegionsRepaired).toBe(0);
   });
 
   it("triggers retry path when first output remains invalid", async () => {
@@ -123,39 +130,6 @@ describe("generateThemeFromStarter", () => {
 
     expect(result.report.retryCount).toBe(1);
     expect(result.validation.passed).toBe(true);
-  });
-
-  it("retries with stronger styling when first pass is too similar", async () => {
-    const starter = await loadStarterThemeFixture();
-    const baseCssCore = starter.match(/<style>([\s\S]*?)\{CustomCSS\}/)?.[1] || "";
-    const veryDifferentCss = baseCssCore.replace(/;/g, " !important;");
-
-    mockedGenerate
-      .mockResolvedValueOnce({
-        editableZones: {
-          cssCore: ":root{--t-bg:#111;--t-surface:#1e1e1e;--t-text:#f5f5f5;}",
-        },
-        metaDefaults: {},
-        notes: [],
-      })
-      .mockResolvedValueOnce({
-        editableZones: {
-          cssCore: veryDifferentCss,
-        },
-        metaDefaults: {},
-        notes: ["distinctness retry"],
-      });
-
-    const result = await generateThemeFromStarter(request, {
-      templatePath: starterThemePath(),
-      templateHtml: starter,
-      templateHash: sha256(starter),
-      baseLangKeys: [],
-    });
-
     expect(mockedGenerate).toHaveBeenCalledTimes(2);
-    expect(result.report.retryCount).toBe(1);
-    expect(result.validation.passed).toBe(true);
-    expect(result.themeHtml).toContain("!important");
   });
 });
