@@ -9,6 +9,7 @@ import {
   type GenerateResponse,
   type ValidationCheck,
 } from "@/lib/schema";
+import { buildFakeTumblrPreviewHtml } from "@/lib/preview/fake-tumblr";
 import { normalizeSlug } from "@/lib/utils";
 
 const PRESET_STORAGE_KEY = "themblr.presets.v1";
@@ -98,6 +99,7 @@ export function ThemblrApp() {
   const [presets, setPresets] = useState<PresetMap>({});
   const [selectedPreset, setSelectedPreset] = useState<string>("");
   const [result, setResult] = useState<GenerateResponse | null>(null);
+  const [outputView, setOutputView] = useState<"preview" | "code">("preview");
   const [error, setError] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -230,6 +232,7 @@ export function ThemblrApp() {
 
       const parsed = GenerateResponseSchema.parse(payload);
       setResult(parsed);
+      setOutputView("preview");
     } catch (err) {
       setResult(null);
       setError(err instanceof Error ? err.message : "Generation failed");
@@ -239,6 +242,13 @@ export function ThemblrApp() {
   }
 
   const presetNames = useMemo(() => Object.keys(presets).sort(), [presets]);
+  const previewHtml = useMemo(() => {
+    if (!result) {
+      return "";
+    }
+
+    return buildFakeTumblrPreviewHtml(result.themeHtml, requestState);
+  }, [result, requestState]);
 
   return (
     <main className="themblr-shell">
@@ -482,8 +492,30 @@ export function ThemblrApp() {
               ))}
             </div>
 
-            <h3>Generated HTML</h3>
-            <textarea className="code" readOnly value={result.themeHtml} rows={26} />
+            <div className="output-tabs">
+              <button type="button" className={outputView === "preview" ? "tab is-active" : "tab"} onClick={() => setOutputView("preview")}>
+                Live Preview
+              </button>
+              <button type="button" className={outputView === "code" ? "tab is-active" : "tab"} onClick={() => setOutputView("code")}>
+                Generated HTML
+              </button>
+            </div>
+
+            {outputView === "preview" ? (
+              <div className="preview-wrap">
+                <p className="preview-note">
+                  Simulated Tumblr install with sample post data. Use this for layout and style validation before uploading to Tumblr.
+                </p>
+                <iframe
+                  title="Theme preview"
+                  className="theme-preview-frame"
+                  srcDoc={previewHtml}
+                  sandbox=""
+                />
+              </div>
+            ) : null}
+
+            {outputView === "code" ? <textarea className="code" readOnly value={result.themeHtml} rows={26} /> : null}
           </>
         ) : null}
       </section>
