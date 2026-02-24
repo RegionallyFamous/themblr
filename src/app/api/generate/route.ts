@@ -8,6 +8,65 @@ import { enforcePromptLimit, parseJsonWithGuard, RequestGuardError } from "@/lib
 import { loadStarterTemplate } from "@/lib/template/loader";
 import { getClientIp } from "@/lib/utils";
 
+function mapGenerateError(error: unknown): { status: number; message: string } | null {
+  if (!(error instanceof Error)) {
+    return null;
+  }
+
+  if (error.name === "AbortError") {
+    return {
+      status: 504,
+      message: "Generation timed out. Try a shorter prompt or increase GENERATION_TIMEOUT_MS.",
+    };
+  }
+
+  if (error.message.includes("Unable to locate starter theme.html")) {
+    return {
+      status: 500,
+      message:
+        "Starter template not found. Set STARTER_THEME_PATH to a valid theme.html path available in this deployment.",
+    };
+  }
+
+  if (error.message === "OPENAI_API_KEY is missing" || error.message === "OPENAI_MODEL is missing") {
+    return {
+      status: 500,
+      message: error.message,
+    };
+  }
+
+  const openAiStatus = (error as { status?: unknown }).status;
+  if (typeof openAiStatus === "number") {
+    if (openAiStatus === 401 || openAiStatus === 403) {
+      return {
+        status: 502,
+        message: "OpenAI request failed authentication. Check OPENAI_API_KEY.",
+      };
+    }
+
+    if (openAiStatus === 429) {
+      return {
+        status: 503,
+        message: "OpenAI rate limit reached. Retry shortly.",
+      };
+    }
+
+    if (openAiStatus >= 500) {
+      return {
+        status: 502,
+        message: "OpenAI service is temporarily unavailable. Retry shortly.",
+      };
+    }
+
+    return {
+      status: 502,
+      message: `OpenAI request failed (${openAiStatus}).`,
+    };
+  }
+
+  return null;
+}
+
 export async function POST(request: Request) {
   const requestId = requestIdFromHeaders(request.headers);
   const startedAt = Date.now();
@@ -56,6 +115,11 @@ export async function POST(request: Request) {
 
     if (error instanceof Error && error.name === "ZodError") {
       return jsonResponse({ ok: false, error: "Invalid request schema" }, 400);
+    }
+
+    const mappedError = mapGenerateError(error);
+    if (mappedError) {
+      return jsonResponse({ ok: false, error: mappedError.message }, mappedError.status);
     }
 
     return jsonResponse({ ok: false, error: "Internal server error" }, 500);
