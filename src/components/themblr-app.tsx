@@ -220,9 +220,6 @@ export function ThemblrApp({ initialThemeHtml = "" }: ThemblrAppProps) {
       </section>
 
       <section className="panel output">
-        <h2>Output</h2>
-        <p className="output-status">{result ? (result.validation.passed ? "Validation passed" : "Validation failed") : "Default Era preview loaded"}</p>
-
         {result ? (
           <>
             <h3>Contract Report</h3>

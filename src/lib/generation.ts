@@ -25,7 +25,7 @@ export async function generateThemeFromStarter(
     request,
     baseEditableZones: extracted.editableZones,
     timeoutMs: env.generationTimeoutMs,
-    reducedScope: false,
+    reducedScope: true,
   });
 
   let composeResult = composeTemplate({

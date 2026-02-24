@@ -99,7 +99,7 @@ describe("generateThemeFromStarter", () => {
     mockedGenerate
       .mockResolvedValueOnce({
         editableZones: {
-          cssCore: ".oops { color: red; }",
+          cssCore: "@import url(http://example.invalid/evil.css);\n.oops { color: red; }",
         },
         metaDefaults: {
           "color:Surface": "",

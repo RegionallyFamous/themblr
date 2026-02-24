@@ -29,6 +29,20 @@ describe("template zones", () => {
     expect(result.changedRegions.find((x) => x.zone === "contextSection")?.changed).toBe(true);
   });
 
+  it("merges short css overrides on top of base css to preserve contract hooks", async () => {
+    const starter = await loadStarterThemeFixture();
+    const result = composeTemplate({
+      templateHtml: starter,
+      zoneOverrides: {
+        cssCore: ":root{--t-bg:#111;--t-surface:#222;}",
+      },
+    });
+
+    expect(result.themeHtml).toContain("Themblr AI override");
+    expect(result.themeHtml).toContain(".site-main");
+    expect(result.themeHtml).toContain(".pagination");
+  });
+
   it("repairs locked root contract when changed", async () => {
     const starter = await loadStarterThemeFixture();
     const mutated = starter.replace('data-layout="{select:Layout}"', 'data-layout="broken"');

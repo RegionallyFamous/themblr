@@ -42,11 +42,38 @@ function buildSystemPrompt(reducedScope: boolean): string {
     "Keep Tumblr tags, blocks, and variables untouched unless they are already in editable sections.",
     "Do not add external dependencies (no external script src, no external CSS/font cdns).",
     "Preserve {CustomCSS} marker expectation by not outputting it in cssCore.",
+    "Favor concise output. Keep cssCore compact and avoid rewriting unrelated sections.",
   ].join("\n");
+}
+
+function truncateForPrompt(value: string, maxChars: number): string {
+  if (value.length <= maxChars) {
+    return value;
+  }
+
+  return `${value.slice(0, maxChars)}\n... [truncated ${value.length - maxChars} chars]`;
 }
 
 function buildUserPrompt(options: AiGenerateOptions): string {
   const { request, baseEditableZones, violations, reducedScope } = options;
+
+  const cssForPrompt = truncateForPrompt(baseEditableZones.cssCore, 5000);
+  const headerForPrompt = truncateForPrompt(baseEditableZones.headerSection, 1800);
+  const sidebarForPrompt = truncateForPrompt(baseEditableZones.sidebarSection, 1800);
+  const contextForPrompt = truncateForPrompt(baseEditableZones.contextSection, 1800);
+
+  const zoneSections = [
+    "Base editable zones (truncated for latency; maintain contracts):",
+    `<cssCore>\n${cssForPrompt}\n</cssCore>`,
+  ];
+
+  if (!reducedScope) {
+    zoneSections.push(
+      `<headerSection>\n${headerForPrompt}\n</headerSection>`,
+      `<sidebarSection>\n${sidebarForPrompt}\n</sidebarSection>`,
+      `<contextSection>\n${contextForPrompt}\n</contextSection>`,
+    );
+  }
 
   return [
     `Theme name: ${request.themeName}`,
@@ -62,11 +89,7 @@ function buildUserPrompt(options: AiGenerateOptions): string {
     `Creative prompt: ${request.prompt}`,
     reducedScope ? "Reduced scope: true" : "Reduced scope: false",
     violations?.length ? `Prior validation violations: ${violations.join(" | ")}` : "Prior validation violations: none",
-    "Base editable zones (edit only these):",
-    `<cssCore>\n${baseEditableZones.cssCore}\n</cssCore>`,
-    `<headerSection>\n${baseEditableZones.headerSection}\n</headerSection>`,
-    `<sidebarSection>\n${baseEditableZones.sidebarSection}\n</sidebarSection>`,
-    `<contextSection>\n${baseEditableZones.contextSection}\n</contextSection>`,
+    ...zoneSections,
   ].join("\n\n");
 }
 

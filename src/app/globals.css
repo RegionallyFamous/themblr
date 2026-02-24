@@ -238,18 +238,6 @@ button:disabled {
   padding-left: 1.1rem;
 }
 
-.output-status {
-  margin: 0 0 0.75rem;
-  display: inline-block;
-  border: var(--border);
-  background: var(--paper-alt);
-  box-shadow: 3px 3px 0 var(--ink);
-  padding: 0.4rem 0.65rem;
-  text-transform: uppercase;
-  font-size: 0.78rem;
-  letter-spacing: 0.03em;
-}
-
 .checks {
   display: grid;
   gap: 0.45rem;

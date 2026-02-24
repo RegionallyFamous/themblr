@@ -53,7 +53,7 @@ describe("ThemblrApp", () => {
     await user.click(screen.getByRole("button", { name: "Generate Theme" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Validation passed")).toBeInTheDocument();
+      expect(screen.getByText(/Locked regions repaired: 0/)).toBeInTheDocument();
     });
 
     expect(screen.getByText(/Locked regions repaired: 0/)).toBeInTheDocument();
@@ -102,7 +102,7 @@ describe("ThemblrApp", () => {
     await user.click(screen.getByRole("button", { name: "Generate Theme" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Validation failed")).toBeInTheDocument();
+      expect(screen.getByText(/Retry count: 1/)).toBeInTheDocument();
     });
 
     expect(screen.queryByText(/req-422/)).not.toBeInTheDocument();

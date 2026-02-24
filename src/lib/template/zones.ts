@@ -2,6 +2,7 @@ import {
   EDITABLE_ZONE_KEYS,
   LOCKED_ZONE_KEYS,
   REQUIRED_META_OPTION_NAMES,
+  REQUIRED_STABLE_HOOKS,
   type EditableZoneKey,
   type LockedZoneKey,
 } from "@/lib/contracts";
@@ -105,6 +106,14 @@ function normalizeZone(zone: string): string {
   return zone.trim();
 }
 
+function shouldMergeWithBaseCss(baseCssCore: string, overrideCssCore: string): boolean {
+  if (overrideCssCore.length < Math.max(1200, Math.floor(baseCssCore.length * 0.45))) {
+    return true;
+  }
+
+  return REQUIRED_STABLE_HOOKS.some((hook) => !overrideCssCore.includes(hook));
+}
+
 function applyCssCore(html: string, cssCore: string): string {
   return html.replace(STYLE_BLOCK_RE, (_full, styleContent: string) => {
     const marker = "{CustomCSS}";
@@ -113,8 +122,13 @@ function applyCssCore(html: string, cssCore: string): string {
       return _full;
     }
 
+    const baseCssCore = styleContent.slice(0, markerIndex).trimEnd();
+    const normalizedOverride = normalizeZone(cssCore);
+    const mergedCssCore = shouldMergeWithBaseCss(baseCssCore, normalizedOverride)
+      ? `${baseCssCore}\n\n        /* Themblr AI override */\n        ${normalizedOverride}`
+      : normalizedOverride;
     const markerAndSuffix = styleContent.slice(markerIndex);
-    const nextContent = `${normalizeZone(cssCore)}\n\n        ${markerAndSuffix.trimStart()}`;
+    const nextContent = `${mergedCssCore}\n\n        ${markerAndSuffix.trimStart()}`;
     return `<style>\n${nextContent}\n    </style>`;
   });
 }
