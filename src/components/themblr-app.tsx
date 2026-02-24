@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import {
   GenerateResponseSchema,
-  PresetSchema,
   type GenerateRequest,
   type GenerateResponse,
   type ValidationCheck,
@@ -12,51 +11,12 @@ import {
 import { buildFakeTumblrPreviewHtml } from "@/lib/preview/fake-tumblr";
 import { normalizeSlug } from "@/lib/utils";
 
-const PRESET_STORAGE_KEY = "themblr.presets.v1";
-
-type PresetMap = Record<string, GenerateRequest>;
-type BrowserStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
-
 const defaultRequest: GenerateRequest = {
   themeName: "Default Era",
   slug: "default-era",
-  structured: decideStructured("Default Era", "Neo-brutal Tumblr theme with strong contrast and sharp hierarchy."),
-  prompt: "Build a neo-brutal Tumblr theme variation with punchy contrast, crisp hierarchy, and expressive type.",
+  structured: decideStructured("Default Era", "Build a solid starter Tumblr theme with clear hierarchy."),
+  prompt: "Create a distinct Tumblr theme with strong hierarchy, good readability, and a clear visual identity.",
 };
-
-function toPrettyJson(value: unknown) {
-  return JSON.stringify(value, null, 2);
-}
-
-function getBrowserStorage(): BrowserStorage | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const storageCandidate = window.localStorage as Partial<Storage> | undefined;
-  if (!storageCandidate) {
-    return null;
-  }
-
-  if (
-    typeof storageCandidate.getItem !== "function" ||
-    typeof storageCandidate.setItem !== "function" ||
-    typeof storageCandidate.removeItem !== "function"
-  ) {
-    return null;
-  }
-
-  return storageCandidate as BrowserStorage;
-}
-
-function serializePreset(name: string, data: GenerateRequest) {
-  return {
-    version: "1.0",
-    name,
-    updatedAt: new Date().toISOString(),
-    data,
-  } as const;
-}
 
 function downloadText(filename: string, content: string, mimeType = "text/plain;charset=utf-8") {
   const blob = new Blob([content], { type: mimeType });
@@ -80,38 +40,28 @@ function keywordMatch(input: string, keywords: string[]): boolean {
   return keywords.some((keyword) => input.includes(keyword));
 }
 
-function hashSeed(input: string): number {
-  let hash = 0;
-  for (let i = 0; i < input.length; i += 1) {
-    hash = (hash * 33 + input.charCodeAt(i)) % 2_147_483_647;
-  }
-  return Math.abs(hash);
-}
-
 function decideStructured(themeName: string, prompt: string): GenerateRequest["structured"] {
   const raw = `${themeName} ${prompt}`.toLowerCase();
-  const seed = hashSeed(raw);
 
   const layout =
-    keywordMatch(raw, ["grid", "gallery", "masonry", "catalog"]) ? "grid" : keywordMatch(raw, ["split", "magazine", "editorial", "sidebar"]) ? "split" : "stream";
+    keywordMatch(raw, ["grid", "gallery", "masonry", "catalog"]) ? "grid" : keywordMatch(raw, ["split", "sidebar", "two-column", "magazine"]) ? "split" : "stream";
 
   const postWidth =
     keywordMatch(raw, ["compact", "dense", "tight"]) ? "compact" : keywordMatch(raw, ["wide", "spacious", "cinematic"]) ? "wide" : "regular";
 
   const cardStyle =
     keywordMatch(raw, ["minimal", "clean", "bare"]) ? "minimal" : keywordMatch(raw, ["elevated", "shadow", "layered"]) ? "elevated" : "outlined";
-
-  const headerAlignment = keywordMatch(raw, ["center", "centered"]) || seed % 6 === 0 ? "center" : "left";
+  const headerAlignment = keywordMatch(raw, ["center", "centered"]) ? "center" : "left";
   const notesAvatarSize = keywordMatch(raw, ["large avatar", "big avatar", "avatar-forward"]) ? "large" : "small";
   const enableMotion = !keywordMatch(raw, ["no motion", "static", "reduced motion"]);
 
-  let paletteHint = "Neo-brutal high contrast with one punchy accent";
+  let paletteHint = "Balanced palette with one clear accent";
   if (keywordMatch(raw, ["mono", "monochrome", "black and white"])) {
-    paletteHint = "High contrast monochrome with a single warning accent";
+    paletteHint = "Monochrome palette with a single accent";
   } else if (keywordMatch(raw, ["warm", "sunset", "earthy"])) {
-    paletteHint = "Warm paper tones with hot orange and black outlines";
+    paletteHint = "Warm palette with a bright accent";
   } else if (keywordMatch(raw, ["cool", "ocean", "cyber"])) {
-    paletteHint = "Cool steel base with electric cyan accents";
+    paletteHint = "Cool palette with high-clarity accents";
   }
 
   return {
@@ -130,7 +80,7 @@ function decideStructured(themeName: string, prompt: string): GenerateRequest["s
       showFooter: true,
       enableMotion,
     },
-    tone: prompt.trim().slice(0, 120) || "Bold, expressive, high-contrast editorial",
+    tone: prompt.trim().slice(0, 120) || "Clean, thoughtful, and editorial",
     paletteHint,
   };
 }
@@ -141,97 +91,10 @@ interface ThemblrAppProps {
 
 export function ThemblrApp({ initialThemeHtml = "" }: ThemblrAppProps) {
   const [requestState, setRequestState] = useState<GenerateRequest>(defaultRequest);
-  const [presets, setPresets] = useState<PresetMap>({});
-  const [selectedPreset, setSelectedPreset] = useState<string>("");
   const [result, setResult] = useState<GenerateResponse | null>(null);
   const [outputView, setOutputView] = useState<"preview" | "code">("preview");
   const [error, setError] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
-
-  useEffect(() => {
-    const storage = getBrowserStorage();
-    if (!storage) {
-      return;
-    }
-
-    try {
-      const raw = storage.getItem(PRESET_STORAGE_KEY);
-      if (!raw) {
-        return;
-      }
-
-      const parsed = JSON.parse(raw) as PresetMap;
-      setPresets(parsed);
-    } catch {
-      storage.removeItem(PRESET_STORAGE_KEY);
-    }
-  }, []);
-
-  function persistPresets(next: PresetMap) {
-    setPresets(next);
-
-    const storage = getBrowserStorage();
-    if (storage) {
-      storage.setItem(PRESET_STORAGE_KEY, JSON.stringify(next));
-    }
-  }
-
-  function savePreset() {
-    const name = window.prompt("Preset name", requestState.themeName)?.trim();
-    if (!name) {
-      return;
-    }
-
-    const next = {
-      ...presets,
-      [name]: requestState,
-    };
-
-    persistPresets(next);
-    setSelectedPreset(name);
-  }
-
-  function loadPreset(name: string) {
-    if (!name || !presets[name]) {
-      return;
-    }
-
-    setRequestState(presets[name]);
-    setSelectedPreset(name);
-  }
-
-  function exportPreset() {
-    const name = selectedPreset || requestState.themeName || "themblr-preset";
-    const payload = serializePreset(name, requestState);
-
-    downloadText(`${normalizeSlug(name)}-preset.json`, toPrettyJson(payload), "application/json;charset=utf-8");
-  }
-
-  async function importPreset(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    try {
-      const text = await file.text();
-      const parsed = PresetSchema.parse(JSON.parse(text));
-
-      const next = {
-        ...presets,
-        [parsed.name]: parsed.data,
-      };
-
-      persistPresets(next);
-      setSelectedPreset(parsed.name);
-      setRequestState(parsed.data);
-      setError("");
-    } catch {
-      setError("Invalid preset file. Expected Themblr preset schema v1.0.");
-    } finally {
-      event.target.value = "";
-    }
-  }
 
   async function runGenerate() {
     setIsGenerating(true);
@@ -275,7 +138,6 @@ export function ThemblrApp({ initialThemeHtml = "" }: ThemblrAppProps) {
     }
   }
 
-  const presetNames = useMemo(() => Object.keys(presets).sort(), [presets]);
   const previewSourceThemeHtml = result?.themeHtml || initialThemeHtml;
   const previewHtml = useMemo(() => {
     if (!previewSourceThemeHtml) {
@@ -319,38 +181,6 @@ export function ThemblrApp({ initialThemeHtml = "" }: ThemblrAppProps) {
             }
           />
         </label>
-
-        <h2>Presets</h2>
-        <div className="inline wrap">
-          <select
-            value={selectedPreset}
-            onChange={(event) => {
-              const nextName = event.target.value;
-              setSelectedPreset(nextName);
-              loadPreset(nextName);
-            }}
-          >
-            <option value="">Select preset</option>
-            {presetNames.map((name) => (
-              <option value={name} key={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-          <button type="button" onClick={savePreset}>
-            Save
-          </button>
-          <button type="button" disabled={!selectedPreset} onClick={() => loadPreset(selectedPreset)}>
-            Load
-          </button>
-          <button type="button" onClick={exportPreset}>
-            Export JSON
-          </button>
-          <label className="file-picker">
-            Import JSON
-            <input type="file" accept="application/json" onChange={importPreset} />
-          </label>
-        </div>
 
         <div className="actions">
           <button type="button" disabled={isGenerating} onClick={runGenerate}>

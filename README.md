@@ -12,7 +12,6 @@ Themblr is an AI-assisted generator that produces new Tumblr `theme.html` varian
 - Shows Default Era fake Tumblr preview before first generation
 - Hard contract validator with report
 - Auto-repair + one corrective retry path
-- In-browser preset save/load + JSON export/import
 - Public-ready with basic IP rate limits
 
 ## Routes
