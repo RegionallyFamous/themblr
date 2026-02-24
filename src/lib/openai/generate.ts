@@ -5,6 +5,8 @@ import { getEnv } from "@/lib/env";
 import { AiGenerationSchema, type AiGeneration, type GenerateRequest } from "@/lib/schema";
 
 let client: OpenAI | null = null;
+const MAX_MODEL_ATTEMPTS = 2;
+const RETRY_DELAYS_MS = [700, 1500];
 
 function getClient(): OpenAI {
   const env = getEnv();
@@ -68,6 +70,103 @@ function buildUserPrompt(options: AiGenerateOptions): string {
   ].join("\n\n");
 }
 
+function getErrorStatus(error: unknown): number | null {
+  if (error && typeof error === "object") {
+    const status = (error as { status?: unknown }).status;
+    if (typeof status === "number") {
+      return status;
+    }
+  }
+
+  return null;
+}
+
+function isRetryableOpenAiError(error: unknown): boolean {
+  const status = getErrorStatus(error);
+  return typeof status === "number" && status >= 500;
+}
+
+function timeoutError(message: string): Error {
+  const err = new Error(message);
+  err.name = "AbortError";
+  return err;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function requestOpenAiJsonForModel(
+  openai: OpenAI,
+  model: string,
+  options: AiGenerateOptions,
+  deadlineAt: number,
+): Promise<string> {
+  for (let attempt = 0; attempt < MAX_MODEL_ATTEMPTS; attempt += 1) {
+    const remainingMs = deadlineAt - Date.now();
+    if (remainingMs <= 250) {
+      throw timeoutError("Generation timed out before OpenAI request");
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), remainingMs);
+
+    try {
+      const completion = await openai.chat.completions.create(
+        {
+          model,
+          temperature: 0.7,
+          response_format: { type: "json_object" },
+          messages: [
+            {
+              role: "system",
+              content: buildSystemPrompt(Boolean(options.reducedScope)),
+            },
+            {
+              role: "user",
+              content: buildUserPrompt(options),
+            },
+          ],
+        },
+        { signal: controller.signal },
+      );
+
+      const raw = completion.choices[0]?.message?.content;
+      if (!raw) {
+        throw new Error("OpenAI returned empty content");
+      }
+
+      return raw;
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw timeoutError("Generation timed out while waiting for OpenAI");
+      }
+
+      const status = getErrorStatus(error);
+      if (status === 429) {
+        throw error;
+      }
+
+      if (isRetryableOpenAiError(error) && attempt < MAX_MODEL_ATTEMPTS - 1) {
+        const remaining = deadlineAt - Date.now();
+        if (remaining <= 350) {
+          throw timeoutError("Generation timed out during retry backoff");
+        }
+
+        const retryDelay = Math.min(RETRY_DELAYS_MS[attempt] ?? 800, Math.max(150, remaining - 250));
+        await sleep(retryDelay);
+        continue;
+      }
+
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  throw new Error("OpenAI request failed after retries");
+}
+
 export async function generateEditableOverridesWithOpenAI(options: AiGenerateOptions): Promise<AiGeneration> {
   const env = getEnv();
   if (!env.openAiModel) {
@@ -75,43 +174,29 @@ export async function generateEditableOverridesWithOpenAI(options: AiGenerateOpt
   }
 
   const openai = getClient();
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
+  const deadlineAt = Date.now() + options.timeoutMs;
+  const fallbackModel = env.openAiFallbackModel.trim();
 
+  let raw: string;
   try {
-    const completion = await openai.chat.completions.create(
-      {
-        model: env.openAiModel,
-        temperature: 0.7,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content: buildSystemPrompt(Boolean(options.reducedScope)),
-          },
-          {
-            role: "user",
-            content: buildUserPrompt(options),
-          },
-        ],
-      },
-      { signal: controller.signal },
-    );
+    raw = await requestOpenAiJsonForModel(openai, env.openAiModel, options, deadlineAt);
+  } catch (error) {
+    const status = getErrorStatus(error);
+    const canFallback = Boolean(fallbackModel) && fallbackModel !== env.openAiModel;
 
-    const raw = completion.choices[0]?.message?.content;
-    if (!raw) {
-      throw new Error("OpenAI returned empty content");
+    if (status === 429 && canFallback) {
+      raw = await requestOpenAiJsonForModel(openai, fallbackModel, options, deadlineAt);
+    } else {
+      throw error;
     }
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      throw new Error("OpenAI returned non-JSON output");
-    }
-
-    return AiGenerationSchema.parse(parsed);
-  } finally {
-    clearTimeout(timeout);
   }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("OpenAI returned non-JSON output");
+  }
+
+  return AiGenerationSchema.parse(parsed);
 }

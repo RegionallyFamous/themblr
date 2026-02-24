@@ -32,6 +32,7 @@ Required:
 
 Optional:
 
+- `OPENAI_FALLBACK_MODEL` (used if primary model returns rate limit)
 - `STARTER_THEME_PATH`
 - `RATE_LIMIT_WINDOW_MS` (default `60000`)
 - `RATE_LIMIT_MAX` (default `20`)

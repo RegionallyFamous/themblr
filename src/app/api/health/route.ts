@@ -19,6 +19,7 @@ export async function GET() {
     ok: true,
     service: "themblr",
     modelConfigured: Boolean(env.openAiModel),
+    fallbackModelConfigured: Boolean(env.openAiFallbackModel),
     apiKeyConfigured: Boolean(env.openAiApiKey),
     starterTemplateResolved,
     starterTemplatePath,

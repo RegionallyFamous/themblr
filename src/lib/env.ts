@@ -17,6 +17,7 @@ export function getEnv() {
   return {
     openAiApiKey: process.env.OPENAI_API_KEY ?? "",
     openAiModel: process.env.OPENAI_MODEL ?? "",
+    openAiFallbackModel: process.env.OPENAI_FALLBACK_MODEL ?? "",
     starterThemePath: process.env.STARTER_THEME_PATH,
     rateLimitWindowMs: readInt(process.env.RATE_LIMIT_WINDOW_MS, DEFAULT_ENV.RATE_LIMIT_WINDOW_MS),
     rateLimitMax: readInt(process.env.RATE_LIMIT_MAX, DEFAULT_ENV.RATE_LIMIT_MAX),
