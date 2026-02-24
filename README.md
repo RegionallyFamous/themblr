@@ -6,9 +6,10 @@ Themblr is an AI-assisted generator that produces new Tumblr `theme.html` varian
 
 - Next.js fullstack app (App Router)
 - Server-side OpenAI generation only
-- Structured form + freeform prompt
+- Prompt-first input (Themblr auto-decides structured settings)
 - Download-only single `theme.html` output
 - Live in-app fake Tumblr preview (sample data render)
+- Shows Default Era fake Tumblr preview before first generation
 - Hard contract validator with report
 - Auto-repair + one corrective retry path
 - In-browser preset save/load + JSON export/import

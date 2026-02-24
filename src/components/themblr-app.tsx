@@ -258,13 +258,13 @@ export function ThemblrApp({ initialThemeHtml = "" }: ThemblrAppProps) {
         body: JSON.stringify(payload),
       });
 
-      const payload = await response.json();
+      const responsePayload = await response.json();
 
-      if (!response.ok && !payload?.validation) {
-        throw new Error(payload?.error || "Generation failed");
+      if (!response.ok && !responsePayload?.validation) {
+        throw new Error(responsePayload?.error || "Generation failed");
       }
 
-      const parsed = GenerateResponseSchema.parse(payload);
+      const parsed = GenerateResponseSchema.parse(responsePayload);
       setResult(parsed);
       setOutputView("preview");
     } catch (err) {
