@@ -221,13 +221,7 @@ export function ThemblrApp({ initialThemeHtml = "" }: ThemblrAppProps) {
 
       <section className="panel output">
         <h2>Output</h2>
-
-        <div className="inline wrap">
-          <strong>{result ? (result.validation.passed ? "Validation passed" : "Validation failed") : "Default Era preview loaded"}</strong>
-          {result ? (
-            <button type="button" onClick={() => downloadText(result.fileName, result.themeHtml, "text/html;charset=utf-8")}>Download theme.html</button>
-          ) : null}
-        </div>
+        <p className="output-status">{result ? (result.validation.passed ? "Validation passed" : "Validation failed") : "Default Era preview loaded"}</p>
 
         {result ? (
           <>
@@ -258,26 +252,38 @@ export function ThemblrApp({ initialThemeHtml = "" }: ThemblrAppProps) {
           </>
         ) : null}
 
-        <div className="output-tabs">
-          <button type="button" className={outputView === "preview" ? "tab is-active" : "tab"} onClick={() => setOutputView("preview")}>
-            Live Preview
-          </button>
-          <button
-            type="button"
-            className={outputView === "code" ? "tab is-active" : "tab"}
-            onClick={() => setOutputView("code")}
-            disabled={!result}
-          >
-            Generated HTML
-          </button>
-        </div>
+        <div className="browser-frame">
+          <div className="browser-toolbar">
+            <div className="browser-chrome">
+              <span className="browser-dot dot-red" />
+              <span className="browser-dot dot-yellow" />
+              <span className="browser-dot dot-green" />
+              <div className="browser-address">{outputView === "preview" ? "tumblr.local/preview" : result?.fileName || "theme.html"}</div>
+            </div>
+            <div className="browser-actions">
+              <div className="output-tabs">
+                <button type="button" className={outputView === "preview" ? "tab is-active" : "tab"} onClick={() => setOutputView("preview")}>
+                  Live Preview
+                </button>
+                <button
+                  type="button"
+                  className={outputView === "code" ? "tab is-active" : "tab"}
+                  onClick={() => setOutputView("code")}
+                  disabled={!result}
+                >
+                  Generated HTML
+                </button>
+              </div>
+              {result ? (
+                <button type="button" className="frame-download" onClick={() => downloadText(result.fileName, result.themeHtml, "text/html;charset=utf-8")}>
+                  Download theme.html
+                </button>
+              ) : null}
+            </div>
+          </div>
 
-        {outputView === "preview" ? (
-          <div className="preview-wrap">
-            <p className="preview-note">
-              Simulated Tumblr install with sample post data. Use this for layout and style validation before uploading to Tumblr.
-            </p>
-            {previewHtml ? (
+          {outputView === "preview" ? (
+            previewHtml ? (
               <iframe
                 title="Theme preview"
                 className="theme-preview-frame"
@@ -285,18 +291,16 @@ export function ThemblrApp({ initialThemeHtml = "" }: ThemblrAppProps) {
                 sandbox="allow-scripts allow-forms"
               />
             ) : (
-              <p className="preview-note">Preview unavailable. Check starter template path in environment.</p>
-            )}
-          </div>
-        ) : null}
-
-        {outputView === "code" ? (
-          result ? (
-            <textarea className="code" readOnly value={result.themeHtml} rows={26} />
+              <p className="preview-empty">Preview unavailable. Check starter template path in environment.</p>
+            )
+          ) : result ? (
+            <div className="code-pane">
+              <textarea className="code" readOnly value={result.themeHtml} rows={26} />
+            </div>
           ) : (
-            <p className="preview-note">Generate a theme to view code output.</p>
-          )
-        ) : null}
+            <p className="preview-empty">Generate a theme to view code output.</p>
+          )}
+        </div>
       </section>
     </main>
   );
