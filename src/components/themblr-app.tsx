@@ -18,28 +18,10 @@ type PresetMap = Record<string, GenerateRequest>;
 type BrowserStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 const defaultRequest: GenerateRequest = {
-  themeName: "My Themblr Theme",
-  slug: "my-themblr-theme",
-  structured: {
-    layout: "stream",
-    postWidth: "regular",
-    cardStyle: "outlined",
-    headerAlignment: "left",
-    notesAvatarSize: "small",
-    toggles: {
-      showSidebar: true,
-      showSearch: true,
-      showFeaturedTags: true,
-      showFollowing: false,
-      showLikesWidget: false,
-      showRelatedPosts: true,
-      showFooter: true,
-      enableMotion: true,
-    },
-    tone: "Clean, thoughtful, and editorial",
-    paletteHint: "Neutral base with one clear accent",
-  },
-  prompt: "Create a modern editorial theme variant with crisp cards, strong hierarchy, and balanced spacing.",
+  themeName: "Default Era",
+  slug: "default-era",
+  structured: decideStructured("Default Era", "Neo-brutal Tumblr theme with strong contrast and sharp hierarchy."),
+  prompt: "Build a neo-brutal Tumblr theme variation with punchy contrast, crisp hierarchy, and expressive type.",
 };
 
 function toPrettyJson(value: unknown) {
@@ -94,7 +76,70 @@ function checkClass(check: ValidationCheck) {
   return check.severity === "warning" ? "check warn" : "check fail";
 }
 
-export function ThemblrApp() {
+function keywordMatch(input: string, keywords: string[]): boolean {
+  return keywords.some((keyword) => input.includes(keyword));
+}
+
+function hashSeed(input: string): number {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash * 33 + input.charCodeAt(i)) % 2_147_483_647;
+  }
+  return Math.abs(hash);
+}
+
+function decideStructured(themeName: string, prompt: string): GenerateRequest["structured"] {
+  const raw = `${themeName} ${prompt}`.toLowerCase();
+  const seed = hashSeed(raw);
+
+  const layout =
+    keywordMatch(raw, ["grid", "gallery", "masonry", "catalog"]) ? "grid" : keywordMatch(raw, ["split", "magazine", "editorial", "sidebar"]) ? "split" : "stream";
+
+  const postWidth =
+    keywordMatch(raw, ["compact", "dense", "tight"]) ? "compact" : keywordMatch(raw, ["wide", "spacious", "cinematic"]) ? "wide" : "regular";
+
+  const cardStyle =
+    keywordMatch(raw, ["minimal", "clean", "bare"]) ? "minimal" : keywordMatch(raw, ["elevated", "shadow", "layered"]) ? "elevated" : "outlined";
+
+  const headerAlignment = keywordMatch(raw, ["center", "centered"]) || seed % 6 === 0 ? "center" : "left";
+  const notesAvatarSize = keywordMatch(raw, ["large avatar", "big avatar", "avatar-forward"]) ? "large" : "small";
+  const enableMotion = !keywordMatch(raw, ["no motion", "static", "reduced motion"]);
+
+  let paletteHint = "Neo-brutal high contrast with one punchy accent";
+  if (keywordMatch(raw, ["mono", "monochrome", "black and white"])) {
+    paletteHint = "High contrast monochrome with a single warning accent";
+  } else if (keywordMatch(raw, ["warm", "sunset", "earthy"])) {
+    paletteHint = "Warm paper tones with hot orange and black outlines";
+  } else if (keywordMatch(raw, ["cool", "ocean", "cyber"])) {
+    paletteHint = "Cool steel base with electric cyan accents";
+  }
+
+  return {
+    layout,
+    postWidth,
+    cardStyle,
+    headerAlignment,
+    notesAvatarSize,
+    toggles: {
+      showSidebar: true,
+      showSearch: true,
+      showFeaturedTags: true,
+      showFollowing: false,
+      showLikesWidget: false,
+      showRelatedPosts: true,
+      showFooter: true,
+      enableMotion,
+    },
+    tone: prompt.trim().slice(0, 120) || "Bold, expressive, high-contrast editorial",
+    paletteHint,
+  };
+}
+
+interface ThemblrAppProps {
+  initialThemeHtml?: string;
+}
+
+export function ThemblrApp({ initialThemeHtml = "" }: ThemblrAppProps) {
   const [requestState, setRequestState] = useState<GenerateRequest>(defaultRequest);
   const [presets, setPresets] = useState<PresetMap>({});
   const [selectedPreset, setSelectedPreset] = useState<string>("");
@@ -129,29 +174,6 @@ export function ThemblrApp() {
     if (storage) {
       storage.setItem(PRESET_STORAGE_KEY, JSON.stringify(next));
     }
-  }
-
-  function updateStructured<K extends keyof GenerateRequest["structured"]>(key: K, value: GenerateRequest["structured"][K]) {
-    setRequestState((prev) => ({
-      ...prev,
-      structured: {
-        ...prev.structured,
-        [key]: value,
-      },
-    }));
-  }
-
-  function updateToggle<K extends keyof GenerateRequest["structured"]["toggles"]>(key: K, value: boolean) {
-    setRequestState((prev) => ({
-      ...prev,
-      structured: {
-        ...prev.structured,
-        toggles: {
-          ...prev.structured.toggles,
-          [key]: value,
-        },
-      },
-    }));
   }
 
   function savePreset() {
@@ -216,12 +238,24 @@ export function ThemblrApp() {
     setError("");
 
     try {
+      const themeName = requestState.themeName.trim() || "Default Era";
+      const prompt = requestState.prompt.trim() || defaultRequest.prompt;
+      const payload: GenerateRequest = {
+        ...requestState,
+        themeName,
+        slug: normalizeSlug(themeName) || "default-era",
+        structured: decideStructured(themeName, prompt),
+        prompt,
+      };
+
+      setRequestState(payload);
+
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify(requestState),
+        body: JSON.stringify(payload),
       });
 
       const payload = await response.json();
@@ -242,21 +276,22 @@ export function ThemblrApp() {
   }
 
   const presetNames = useMemo(() => Object.keys(presets).sort(), [presets]);
+  const previewSourceThemeHtml = result?.themeHtml || initialThemeHtml;
   const previewHtml = useMemo(() => {
-    if (!result) {
+    if (!previewSourceThemeHtml) {
       return "";
     }
 
-    return buildFakeTumblrPreviewHtml(result.themeHtml, requestState);
-  }, [result, requestState]);
+    return buildFakeTumblrPreviewHtml(previewSourceThemeHtml, requestState);
+  }, [previewSourceThemeHtml, requestState]);
 
   return (
     <main className="themblr-shell">
       <section className="panel">
         <h1>Themblr</h1>
-        <p className="subtitle">AI theme generator for Tumblr starter themes.</p>
+        <p className="subtitle">Prompt-first theme generation. Themblr auto-decides layout, cards, typography, and modules for each run.</p>
 
-        <div className="grid two">
+        <div className="grid one">
           <label>
             Theme Name
             <input
@@ -269,135 +304,6 @@ export function ThemblrApp() {
               }
             />
           </label>
-
-          <label>
-            Slug
-            <div className="inline">
-              <input
-                value={requestState.slug}
-                onChange={(event) =>
-                  setRequestState((prev) => ({
-                    ...prev,
-                    slug: event.target.value,
-                  }))
-                }
-              />
-              <button
-                type="button"
-                onClick={() =>
-                  setRequestState((prev) => ({
-                    ...prev,
-                    slug: normalizeSlug(prev.themeName),
-                  }))
-                }
-              >
-                Auto
-              </button>
-            </div>
-          </label>
-        </div>
-
-        <h2>Structured Controls</h2>
-        <div className="grid four">
-          <label>
-            Layout
-            <select
-              value={requestState.structured.layout}
-              onChange={(event) => updateStructured("layout", event.target.value as GenerateRequest["structured"]["layout"])}
-            >
-              <option value="stream">stream</option>
-              <option value="split">split</option>
-              <option value="grid">grid</option>
-            </select>
-          </label>
-
-          <label>
-            Post Width
-            <select
-              value={requestState.structured.postWidth}
-              onChange={(event) =>
-                updateStructured("postWidth", event.target.value as GenerateRequest["structured"]["postWidth"])
-              }
-            >
-              <option value="compact">compact</option>
-              <option value="regular">regular</option>
-              <option value="wide">wide</option>
-            </select>
-          </label>
-
-          <label>
-            Card Style
-            <select
-              value={requestState.structured.cardStyle}
-              onChange={(event) =>
-                updateStructured("cardStyle", event.target.value as GenerateRequest["structured"]["cardStyle"])
-              }
-            >
-              <option value="outlined">outlined</option>
-              <option value="elevated">elevated</option>
-              <option value="minimal">minimal</option>
-            </select>
-          </label>
-
-          <label>
-            Header Alignment
-            <select
-              value={requestState.structured.headerAlignment}
-              onChange={(event) =>
-                updateStructured("headerAlignment", event.target.value as GenerateRequest["structured"]["headerAlignment"])
-              }
-            >
-              <option value="left">left</option>
-              <option value="center">center</option>
-            </select>
-          </label>
-        </div>
-
-        <div className="grid three">
-          <label>
-            Notes Avatar Size
-            <select
-              value={requestState.structured.notesAvatarSize}
-              onChange={(event) =>
-                updateStructured("notesAvatarSize", event.target.value as GenerateRequest["structured"]["notesAvatarSize"])
-              }
-            >
-              <option value="small">small</option>
-              <option value="large">large</option>
-            </select>
-          </label>
-
-          <label>
-            Typography Tone
-            <input
-              value={requestState.structured.tone}
-              onChange={(event) => updateStructured("tone", event.target.value)}
-            />
-          </label>
-
-          <label>
-            Palette Hint
-            <input
-              value={requestState.structured.paletteHint}
-              onChange={(event) => updateStructured("paletteHint", event.target.value)}
-            />
-          </label>
-        </div>
-
-        <h3>Toggles</h3>
-        <div className="toggle-grid">
-          {Object.entries(requestState.structured.toggles).map(([key, value]) => (
-            <label className="toggle" key={key}>
-              <input
-                type="checkbox"
-                checked={value}
-                onChange={(event) =>
-                  updateToggle(key as keyof GenerateRequest["structured"]["toggles"], event.target.checked)
-                }
-              />
-              <span>{key}</span>
-            </label>
-          ))}
         </div>
 
         <label>
@@ -458,15 +364,15 @@ export function ThemblrApp() {
       <section className="panel output">
         <h2>Output</h2>
 
-        {!result ? <p>No generation result yet.</p> : null}
+        <div className="inline wrap">
+          <strong>{result ? (result.validation.passed ? "Validation passed" : "Validation failed") : "Default Era preview loaded"}</strong>
+          {result ? (
+            <button type="button" onClick={() => downloadText(result.fileName, result.themeHtml, "text/html;charset=utf-8")}>Download theme.html</button>
+          ) : null}
+        </div>
 
         {result ? (
           <>
-            <div className="inline wrap">
-              <strong>{result.validation.passed ? "Validation passed" : "Validation failed"}</strong>
-              <button type="button" onClick={() => downloadText(result.fileName, result.themeHtml, "text/html;charset=utf-8")}>Download theme.html</button>
-            </div>
-
             <h3>Contract Report</h3>
             <ul className="plain-list">
               <li>Locked regions repaired: {result.report.lockedRegionsRepaired}</li>
@@ -491,32 +397,47 @@ export function ThemblrApp() {
                 </article>
               ))}
             </div>
-
-            <div className="output-tabs">
-              <button type="button" className={outputView === "preview" ? "tab is-active" : "tab"} onClick={() => setOutputView("preview")}>
-                Live Preview
-              </button>
-              <button type="button" className={outputView === "code" ? "tab is-active" : "tab"} onClick={() => setOutputView("code")}>
-                Generated HTML
-              </button>
-            </div>
-
-            {outputView === "preview" ? (
-              <div className="preview-wrap">
-                <p className="preview-note">
-                  Simulated Tumblr install with sample post data. Use this for layout and style validation before uploading to Tumblr.
-                </p>
-                <iframe
-                  title="Theme preview"
-                  className="theme-preview-frame"
-                  srcDoc={previewHtml}
-                  sandbox=""
-                />
-              </div>
-            ) : null}
-
-            {outputView === "code" ? <textarea className="code" readOnly value={result.themeHtml} rows={26} /> : null}
           </>
+        ) : null}
+
+        <div className="output-tabs">
+          <button type="button" className={outputView === "preview" ? "tab is-active" : "tab"} onClick={() => setOutputView("preview")}>
+            Live Preview
+          </button>
+          <button
+            type="button"
+            className={outputView === "code" ? "tab is-active" : "tab"}
+            onClick={() => setOutputView("code")}
+            disabled={!result}
+          >
+            Generated HTML
+          </button>
+        </div>
+
+        {outputView === "preview" ? (
+          <div className="preview-wrap">
+            <p className="preview-note">
+              Simulated Tumblr install with sample post data. Use this for layout and style validation before uploading to Tumblr.
+            </p>
+            {previewHtml ? (
+              <iframe
+                title="Theme preview"
+                className="theme-preview-frame"
+                srcDoc={previewHtml}
+                sandbox=""
+              />
+            ) : (
+              <p className="preview-note">Preview unavailable. Check starter template path in environment.</p>
+            )}
+          </div>
+        ) : null}
+
+        {outputView === "code" ? (
+          result ? (
+            <textarea className="code" readOnly value={result.themeHtml} rows={26} />
+          ) : (
+            <p className="preview-note">Generate a theme to view code output.</p>
+          )
         ) : null}
       </section>
     </main>
