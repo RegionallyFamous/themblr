@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   GenerateResponseSchema,
   type GenerateRequest,
   type GenerateResponse,
-  type ValidationCheck,
 } from "@/lib/schema";
 import { buildFakeTumblrPreviewHtml } from "@/lib/preview/fake-tumblr";
 import { normalizeSlug } from "@/lib/utils";
@@ -16,6 +15,16 @@ const defaultRequest: GenerateRequest = {
   slug: "default-era",
   structured: decideStructured("Default Era", "Build a solid starter Tumblr theme with clear hierarchy."),
   prompt: "Create a distinct Tumblr theme with strong hierarchy, good readability, and a clear visual identity.",
+};
+
+type GenerateStage = "idle" | "preparing" | "requesting" | "validating" | "finalizing";
+
+const stageLabel: Record<GenerateStage, string> = {
+  idle: "",
+  preparing: "Preparing prompt and structured config",
+  requesting: "Generating design with AI model",
+  validating: "Running contract and safety validation",
+  finalizing: "Finalizing output and preview",
 };
 
 function downloadText(filename: string, content: string, mimeType = "text/plain;charset=utf-8") {
@@ -28,16 +37,28 @@ function downloadText(filename: string, content: string, mimeType = "text/plain;
   URL.revokeObjectURL(url);
 }
 
-function checkClass(check: ValidationCheck) {
-  if (check.passed) {
-    return "check pass";
-  }
-
-  return check.severity === "warning" ? "check warn" : "check fail";
-}
-
 function keywordMatch(input: string, keywords: string[]): boolean {
   return keywords.some((keyword) => input.includes(keyword));
+}
+
+function progressPercent(stage: GenerateStage, elapsedMs: number): number {
+  if (stage === "preparing") {
+    return 8;
+  }
+
+  if (stage === "requesting") {
+    return Math.min(82, 18 + Math.floor(elapsedMs / 1400));
+  }
+
+  if (stage === "validating") {
+    return 90;
+  }
+
+  if (stage === "finalizing") {
+    return 97;
+  }
+
+  return 0;
 }
 
 function decideStructured(themeName: string, prompt: string): GenerateRequest["structured"] {
@@ -95,9 +116,32 @@ export function ThemblrApp({ initialThemeHtml = "" }: ThemblrAppProps) {
   const [outputView, setOutputView] = useState<"preview" | "code">("preview");
   const [error, setError] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generateStage, setGenerateStage] = useState<GenerateStage>("idle");
+  const [generationStartMs, setGenerationStartMs] = useState<number | null>(null);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [lastDurationMs, setLastDurationMs] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isGenerating || generationStartMs === null) {
+      setElapsedMs(0);
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setElapsedMs(Date.now() - generationStartMs);
+    }, 250);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [isGenerating, generationStartMs]);
 
   async function runGenerate() {
+    const startedAt = Date.now();
     setIsGenerating(true);
+    setGenerateStage("preparing");
+    setGenerationStartMs(startedAt);
+    setLastDurationMs(null);
     setError("");
 
     try {
@@ -112,6 +156,7 @@ export function ThemblrApp({ initialThemeHtml = "" }: ThemblrAppProps) {
       };
 
       setRequestState(payload);
+      setGenerateStage("requesting");
 
       const response = await fetch("/api/generate", {
         method: "POST",
@@ -137,6 +182,8 @@ export function ThemblrApp({ initialThemeHtml = "" }: ThemblrAppProps) {
         responsePayload = null;
       }
 
+      setGenerateStage("validating");
+
       const hasValidationPayload =
         responsePayload !== null &&
         typeof responsePayload === "object" &&
@@ -156,13 +203,17 @@ export function ThemblrApp({ initialThemeHtml = "" }: ThemblrAppProps) {
       }
 
       const parsed = GenerateResponseSchema.parse(responsePayload);
+      setGenerateStage("finalizing");
       setResult(parsed);
       setOutputView("preview");
+      setLastDurationMs(Date.now() - startedAt);
     } catch (err) {
       setResult(null);
       setError(err instanceof Error ? err.message : "Generation failed");
     } finally {
       setIsGenerating(false);
+      setGenerateStage("idle");
+      setGenerationStartMs(null);
     }
   }
 
@@ -216,39 +267,25 @@ export function ThemblrApp({ initialThemeHtml = "" }: ThemblrAppProps) {
           </button>
         </div>
 
+        {isGenerating ? (
+          <div className="gen-progress" role="status" aria-live="polite">
+            <div className="gen-progress-head">
+              <strong>Generating theme</strong>
+              <span>{Math.max(1, Math.floor(elapsedMs / 1000))}s</span>
+            </div>
+            <div className="gen-progress-track" aria-hidden="true">
+              <span className="gen-progress-fill" style={{ width: `${progressPercent(generateStage, elapsedMs)}%` }} />
+            </div>
+            <p className="gen-progress-stage">{stageLabel[generateStage]}</p>
+          </div>
+        ) : null}
+
+        {lastDurationMs !== null && !error ? <p className="gen-complete">Generated in {Math.max(1, Math.round(lastDurationMs / 1000))}s</p> : null}
+
         {error ? <p className="error">{error}</p> : null}
       </section>
 
       <section className="panel output">
-        {result ? (
-          <>
-            <h3>Contract Report</h3>
-            <ul className="plain-list">
-              <li>Locked regions repaired: {result.report.lockedRegionsRepaired}</li>
-              <li>Retry count: {result.report.retryCount}</li>
-            </ul>
-
-            <h3>Changed Regions</h3>
-            <ul className="plain-list">
-              {result.report.changedRegions.map((region) => (
-                <li key={region.zone}>
-                  {region.zone}: {region.changed ? "changed" : "unchanged"} ({region.oldChars} → {region.newChars} chars)
-                </li>
-              ))}
-            </ul>
-
-            <h3>Checks</h3>
-            <div className="checks">
-              {result.validation.checks.map((check) => (
-                <article className={checkClass(check)} key={check.id}>
-                  <h4>{check.id}</h4>
-                  <p>{check.message}</p>
-                </article>
-              ))}
-            </div>
-          </>
-        ) : null}
-
         <div className="browser-frame">
           <div className="browser-toolbar">
             <div className="browser-chrome">

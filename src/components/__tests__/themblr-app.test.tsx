@@ -8,7 +8,7 @@ describe("ThemblrApp", () => {
     vi.unstubAllGlobals();
   });
 
-  it("runs generation and renders output report", async () => {
+  it("runs generation and shows preview/code controls without contract report details", async () => {
     const user = userEvent.setup();
 
     const fetchMock = vi.fn().mockResolvedValue({
@@ -53,11 +53,14 @@ describe("ThemblrApp", () => {
     await user.click(screen.getByRole("button", { name: "Generate Theme" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Locked regions repaired: 0/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Download theme.html" })).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/Locked regions repaired: 0/)).toBeInTheDocument();
-    expect(screen.getByText(/cssCore: changed/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Live Preview" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generated HTML" })).toBeInTheDocument();
+    expect(screen.queryByText("Contract Report")).not.toBeInTheDocument();
+    expect(screen.queryByText("Changed Regions")).not.toBeInTheDocument();
+    expect(screen.queryByText("Checks")).not.toBeInTheDocument();
   });
 
   it("accepts a 422 generate response that includes validation payload", async () => {
@@ -102,10 +105,10 @@ describe("ThemblrApp", () => {
     await user.click(screen.getByRole("button", { name: "Generate Theme" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Retry count: 1/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Download theme.html" })).toBeInTheDocument();
     });
 
     expect(screen.queryByText(/req-422/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Retry count: 1/)).toBeInTheDocument();
+    expect(screen.queryByText("Contract Report")).not.toBeInTheDocument();
   });
 });
