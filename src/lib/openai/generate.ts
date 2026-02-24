@@ -42,7 +42,8 @@ function buildSystemPrompt(reducedScope: boolean): string {
     "Keep Tumblr tags, blocks, and variables untouched unless they are already in editable sections.",
     "Do not add external dependencies (no external script src, no external CSS/font cdns).",
     "Preserve {CustomCSS} marker expectation by not outputting it in cssCore.",
-    "Favor concise output. Keep cssCore compact and avoid rewriting unrelated sections.",
+    "Make the visual result clearly distinct from the starter theme.",
+    "Favor concise but high-impact styling changes (tokens, hierarchy, spacing, card treatment, and typography).",
   ].join("\n");
 }
 
@@ -87,6 +88,7 @@ function buildUserPrompt(options: AiGenerateOptions): string {
     `Notes avatar size: ${request.structured.notesAvatarSize}`,
     `Toggles: ${JSON.stringify(request.structured.toggles)}`,
     `Creative prompt: ${request.prompt}`,
+    "Distinctness requirement: final look should be noticeably different from Default Era.",
     reducedScope ? "Reduced scope: true" : "Reduced scope: false",
     violations?.length ? `Prior validation violations: ${violations.join(" | ")}` : "Prior validation violations: none",
     ...zoneSections,

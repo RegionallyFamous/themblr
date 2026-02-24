@@ -225,6 +225,61 @@ button:disabled {
   margin-top: 1rem;
 }
 
+.gen-progress {
+  margin-top: 0.75rem;
+  border: var(--border);
+  background: #fff;
+  box-shadow: 3px 3px 0 var(--ink);
+  padding: 0.6rem 0.7rem;
+}
+
+.gen-progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.gen-progress-head strong {
+  font-size: 0.8rem;
+}
+
+.gen-progress-track {
+  margin-top: 0.45rem;
+  border: 2px solid var(--ink);
+  background: #fff;
+  height: 12px;
+  overflow: hidden;
+}
+
+.gen-progress-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition: width 240ms ease;
+}
+
+.gen-progress-stage {
+  margin: 0.5rem 0 0;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.gen-complete {
+  margin: 0.75rem 0 0;
+  border: var(--border);
+  background: #dcffe8;
+  box-shadow: 3px 3px 0 var(--ink);
+  padding: 0.45rem 0.6rem;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
 .error {
   border: var(--border);
   background: #ffe1e7;
