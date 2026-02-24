@@ -172,4 +172,16 @@ describe("POST /api/generate", () => {
     expect(payload.error).toBe("OPENAI_MODEL is missing");
     expect(payload.requestId).toBeTruthy();
   });
+
+  it("maps aborted OpenAI requests to timeout response", async () => {
+    mockedGenerateThemeFromStarter.mockRejectedValue(new Error("Request was aborted."));
+
+    const response = await POST(makeRequest(validGenerateBody()));
+    const payload = await response.json();
+
+    expect(response.status).toBe(504);
+    expect(payload.ok).toBe(false);
+    expect(payload.error).toBe("Generation timed out. Try a shorter prompt or increase GENERATION_TIMEOUT_MS.");
+    expect(payload.requestId).toBeTruthy();
+  });
 });

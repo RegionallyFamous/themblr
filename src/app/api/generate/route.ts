@@ -13,7 +13,16 @@ function mapGenerateError(error: unknown): { status: number; message: string } |
     return null;
   }
 
+  const normalizedMessage = error.message.trim().toLowerCase();
+
   if (error.name === "AbortError") {
+    return {
+      status: 504,
+      message: "Generation timed out. Try a shorter prompt or increase GENERATION_TIMEOUT_MS.",
+    };
+  }
+
+  if (normalizedMessage.includes("request was aborted")) {
     return {
       status: 504,
       message: "Generation timed out. Try a shorter prompt or increase GENERATION_TIMEOUT_MS.",
