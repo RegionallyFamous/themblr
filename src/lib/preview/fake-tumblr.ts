@@ -14,7 +14,7 @@ const PREVIEW_COLORS = {
 };
 
 const PREVIEW_IMAGE = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540"><rect width="960" height="540" fill="#ffe066"/><rect x="42" y="42" width="876" height="456" fill="#ffffff" stroke="#101010" stroke-width="20"/><text x="480" y="292" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="56" fill="#101010">THEMBLR PREVIEW</text></svg>',
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540"><rect width="960" height="540" fill="#ffe066"/><rect x="42" y="42" width="876" height="456" fill="#ffffff" stroke="#101010" stroke-width="20"/><text x="480" y="292" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="56" fill="#101010">DEFAULT ERA</text></svg>',
 )}`;
 
 const PREVIEW_ICON = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
@@ -27,15 +27,15 @@ const SAMPLE_POSTS = `
     <a class="post-permalink" href="#">2 hours ago</a>
     <span class="post-chip">Pinned</span>
   </header>
-  <h2 class="post-title"><a href="#">Default Era x Themblr Preview</a></h2>
+  <h2 class="post-title"><a href="#">Default Era Launch Notes</a></h2>
   <div class="post-content">
-    <p>This is a simulated Tumblr render so you can inspect spacing, typography, cards, and interaction affordances.</p>
-    <p>Final Tumblr data, notes, and trail content will be inserted by Tumblr at runtime.</p>
+    <p>Default Era is a flexible base built for readable posts, strong hierarchy, and clean spacing across post types.</p>
+    <p>Use this page to review cards, typography rhythm, media framing, and action affordances before publishing.</p>
   </div>
   <ul class="post-tags">
-    <li><a href="#">#themblr</a></li>
+    <li><a href="#">#tumblr-theme</a></li>
     <li><a href="#">#default-era</a></li>
-    <li><a href="#">#neo-brutal</a></li>
+    <li><a href="#">#design-system</a></li>
   </ul>
   <footer class="post-meta">
     <div class="post-stats"><span>42 notes</span><span>7 reblogs</span></div>
@@ -288,9 +288,9 @@ function addPreviewOverrides(html: string): string {
 function buildReplacements(request: GenerateRequest): Array<[string, string]> {
   return [
     ["{Title}", request.themeName || "Default Era"],
-    ["{PostSummary}", "Live Theme Preview"],
-    ["{MetaDescription}", "Themblr simulated Tumblr preview"],
-    ["{Description}", "Default Era starter rendered through Themblr preview mode."],
+    ["{PostSummary}", "Tumblr theme demo"],
+    ["{MetaDescription}", "Default Era Tumblr theme demo"],
+    ["{Description}", "Default Era starter rendered with sample Tumblr content."],
     ["{BlogURL}", "#"],
     ["{Permalink}", "#"],
     ["{TagURL}", "#"],
@@ -301,12 +301,12 @@ function buildReplacements(request: GenerateRequest): Array<[string, string]> {
     ["{PageNumber}", "1"],
     ["{CurrentPage}", "1"],
     ["{TotalPages}", "3"],
-    ["{Tag}", "design"],
+    ["{Tag}", "tumblr-theme"],
     ["{NextPage}", "#"],
     ["{PreviousPage}", "#"],
     ["{PreviousPost}", "#"],
     ["{NextPost}", "#"],
-    ["{SearchQuery}", "themblr"],
+    ["{SearchQuery}", "default era"],
     ["{SearchResultCount}", "12"],
     ["{SearchResultCountWithLabel}", "12 results"],
     ["{TimeAgo}", "2 hours ago"],
@@ -323,11 +323,11 @@ function buildReplacements(request: GenerateRequest): Array<[string, string]> {
     ["{FollowedName}", "default-era"],
     ["{FollowedTitle}", "Default Era"],
     ["{FollowedURL}", "#"],
-    ["{GroupMemberName}", "themblr-studio"],
-    ["{GroupMemberTitle}", "Themblr Studio"],
+    ["{GroupMemberName}", "default-era-studio"],
+    ["{GroupMemberTitle}", "Default Era Studio"],
     ["{GroupMemberURL}", "#"],
     ["{Username}", "default-era"],
-    ["{SourceTitle}", "Themblr"],
+    ["{SourceTitle}", "Default Era"],
     ["{SourceURL}", "#"],
     ["{Favicon}", PREVIEW_ICON],
     ["{RSS}", "#"],
@@ -371,8 +371,8 @@ function buildReplacements(request: GenerateRequest): Array<[string, string]> {
     ["{select:Card Style}", request.structured.cardStyle],
     ["{select:Header Alignment}", request.structured.headerAlignment],
     ["{select:Notes Avatar Size}", request.structured.notesAvatarSize],
-    ["{text:Subtitle}", "Preview Mode"],
-    ["{text:Footer Note}", "Rendered via fake Tumblr install"],
+    ["{text:Subtitle}", "Tumblr theme starter"],
+    ["{text:Footer Note}", "Built with Default Era"],
     ["{text:CTA Label}", "Read more"],
     ["{text:CTA URL}", "#"],
     ["{CustomCSS}", ""],

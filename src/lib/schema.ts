@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+const EditableZoneValueSchema = z
+  .preprocess((value) => (value === null ? undefined : value), z.string().optional());
+
 const ToggleSchema = z.object({
   showSidebar: z.boolean(),
   showSearch: z.boolean(),
@@ -39,10 +42,10 @@ export const ValidateRequestSchema = z.object({
 
 export const EditableZonesSchema = z
   .object({
-    cssCore: z.string().optional(),
-    headerSection: z.string().optional(),
-    sidebarSection: z.string().optional(),
-    contextSection: z.string().optional(),
+    cssCore: EditableZoneValueSchema,
+    headerSection: EditableZoneValueSchema,
+    sidebarSection: EditableZoneValueSchema,
+    contextSection: EditableZoneValueSchema,
   })
   .default({});
 

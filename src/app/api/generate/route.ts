@@ -15,6 +15,13 @@ function mapGenerateError(error: unknown): { status: number; message: string } |
 
   const normalizedMessage = error.message.trim().toLowerCase();
 
+  if (error.name === "ZodError") {
+    return {
+      status: 502,
+      message: "OpenAI returned an invalid response format. Retry shortly.",
+    };
+  }
+
   if (error.name === "AbortError") {
     return {
       status: 504,

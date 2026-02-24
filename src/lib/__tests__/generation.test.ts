@@ -124,4 +124,38 @@ describe("generateThemeFromStarter", () => {
     expect(result.report.retryCount).toBe(1);
     expect(result.validation.passed).toBe(true);
   });
+
+  it("retries with stronger styling when first pass is too similar", async () => {
+    const starter = await loadStarterThemeFixture();
+    const baseCssCore = starter.match(/<style>([\s\S]*?)\{CustomCSS\}/)?.[1] || "";
+    const veryDifferentCss = baseCssCore.replace(/;/g, " !important;");
+
+    mockedGenerate
+      .mockResolvedValueOnce({
+        editableZones: {
+          cssCore: ":root{--t-bg:#111;--t-surface:#1e1e1e;--t-text:#f5f5f5;}",
+        },
+        metaDefaults: {},
+        notes: [],
+      })
+      .mockResolvedValueOnce({
+        editableZones: {
+          cssCore: veryDifferentCss,
+        },
+        metaDefaults: {},
+        notes: ["distinctness retry"],
+      });
+
+    const result = await generateThemeFromStarter(request, {
+      templatePath: starterThemePath(),
+      templateHtml: starter,
+      templateHash: sha256(starter),
+      baseLangKeys: [],
+    });
+
+    expect(mockedGenerate).toHaveBeenCalledTimes(2);
+    expect(result.report.retryCount).toBe(1);
+    expect(result.validation.passed).toBe(true);
+    expect(result.themeHtml).toContain("!important");
+  });
 });

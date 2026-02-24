@@ -1,6 +1,7 @@
 import {
   EDITABLE_ZONE_KEYS,
   LOCKED_ZONE_KEYS,
+  REQUIRED_CSS_VARIABLES,
   REQUIRED_META_OPTION_NAMES,
   REQUIRED_STABLE_HOOKS,
   type EditableZoneKey,
@@ -106,12 +107,57 @@ function normalizeZone(zone: string): string {
   return zone.trim();
 }
 
+const CSS_VAR_FALLBACKS: Record<string, string> = {
+  "--t-bg": "#f7f8fb",
+  "--t-surface": "#ffffff",
+  "--t-text": "#131722",
+  "--t-muted": "#5d6778",
+  "--t-accent": "#2f6fed",
+  "--t-border": "#d8dee8",
+  "--t-radius": "14px",
+  "--t-gap": "1rem",
+  "--t-max-post": "760px",
+};
+
+function detectMissingCssContracts(cssCore: string): { missingHooks: string[]; missingVars: string[] } {
+  const missingHooks = REQUIRED_STABLE_HOOKS.filter((hook) => !cssCore.includes(hook));
+  const missingVars = REQUIRED_CSS_VARIABLES.filter((name) => !new RegExp(`${escapeRegExp(name)}\\s*:`, "i").test(cssCore));
+
+  return { missingHooks: [...missingHooks], missingVars: [...missingVars] };
+}
+
 function shouldMergeWithBaseCss(baseCssCore: string, overrideCssCore: string): boolean {
-  if (overrideCssCore.length < Math.max(1200, Math.floor(baseCssCore.length * 0.45))) {
+  if (overrideCssCore.length < 1200) {
     return true;
   }
 
-  return REQUIRED_STABLE_HOOKS.some((hook) => !overrideCssCore.includes(hook));
+  const missingContracts = detectMissingCssContracts(overrideCssCore);
+  if (missingContracts.missingHooks.length > 0 || missingContracts.missingVars.length > 0) {
+    return true;
+  }
+
+  return overrideCssCore.length < Math.floor(baseCssCore.length * 0.65);
+}
+
+function buildCssContractBackfill(missingHooks: string[], missingVars: string[]): string {
+  const chunks: string[] = [];
+
+  if (missingVars.length > 0) {
+    const vars = missingVars
+      .map((name) => {
+        const fallback = CSS_VAR_FALLBACKS[name];
+        return fallback ? `  ${name}: ${fallback};` : `  ${name}: initial;`;
+      })
+      .join("\n");
+    chunks.push(`:root {\n${vars}\n}`);
+  }
+
+  if (missingHooks.length > 0) {
+    const hooks = missingHooks.map((hook) => `${hook} {}`).join("\n");
+    chunks.push(hooks);
+  }
+
+  return chunks.join("\n\n");
 }
 
 function applyCssCore(html: string, cssCore: string): string {
@@ -124,9 +170,18 @@ function applyCssCore(html: string, cssCore: string): string {
 
     const baseCssCore = styleContent.slice(0, markerIndex).trimEnd();
     const normalizedOverride = normalizeZone(cssCore);
-    const mergedCssCore = shouldMergeWithBaseCss(baseCssCore, normalizedOverride)
-      ? `${baseCssCore}\n\n        /* Themblr AI override */\n        ${normalizedOverride}`
-      : normalizedOverride;
+    let mergedCssCore = normalizedOverride;
+
+    if (shouldMergeWithBaseCss(baseCssCore, normalizedOverride)) {
+      mergedCssCore = `${baseCssCore}\n\n        /* Themblr AI override */\n        ${normalizedOverride}`;
+    } else {
+      const { missingHooks, missingVars } = detectMissingCssContracts(normalizedOverride);
+      if (missingHooks.length > 0 || missingVars.length > 0) {
+        const backfill = buildCssContractBackfill(missingHooks, missingVars);
+        mergedCssCore = `${normalizedOverride}\n\n        /* Themblr contract backfill */\n        ${backfill}`;
+      }
+    }
+
     const markerAndSuffix = styleContent.slice(markerIndex);
     const nextContent = `${mergedCssCore}\n\n        ${markerAndSuffix.trimStart()}`;
     return `<style>\n${nextContent}\n    </style>`;

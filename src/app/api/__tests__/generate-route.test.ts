@@ -184,4 +184,18 @@ describe("POST /api/generate", () => {
     expect(payload.error).toBe("Generation timed out. Try a shorter prompt or increase GENERATION_TIMEOUT_MS.");
     expect(payload.requestId).toBeTruthy();
   });
+
+  it("maps invalid model response shape errors to 502", async () => {
+    const invalidShapeError = new Error("invalid schema");
+    invalidShapeError.name = "ZodError";
+    mockedGenerateThemeFromStarter.mockRejectedValue(invalidShapeError);
+
+    const response = await POST(makeRequest(validGenerateBody()));
+    const payload = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(payload.ok).toBe(false);
+    expect(payload.error).toBe("OpenAI returned an invalid response format. Retry shortly.");
+    expect(payload.requestId).toBeTruthy();
+  });
 });

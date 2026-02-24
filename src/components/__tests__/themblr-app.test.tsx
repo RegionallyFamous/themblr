@@ -56,8 +56,9 @@ describe("ThemblrApp", () => {
       expect(screen.getByRole("button", { name: "Download theme.html" })).toBeInTheDocument();
     });
 
-    expect(screen.getByRole("button", { name: "Live Preview" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Theme Frame" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Generated HTML" })).toBeInTheDocument();
+    expect(screen.getByText("themblr.local/preview")).toBeInTheDocument();
     expect(screen.queryByText("Contract Report")).not.toBeInTheDocument();
     expect(screen.queryByText("Changed Regions")).not.toBeInTheDocument();
     expect(screen.queryByText("Checks")).not.toBeInTheDocument();

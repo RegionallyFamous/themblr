@@ -35,7 +35,8 @@ describe("buildFakeTumblrPreviewHtml", () => {
     const preview = buildFakeTumblrPreviewHtml(starter, request);
 
     expect(preview).toContain("themblr-preview-post");
-    expect(preview).toContain("Live Theme Preview");
+    expect(preview).toContain("Tumblr theme demo");
+    expect(preview).toContain("Default Era Launch Notes");
     expect(preview).not.toContain("{block:Posts");
     expect(preview).not.toContain("{/block:Posts}");
   });

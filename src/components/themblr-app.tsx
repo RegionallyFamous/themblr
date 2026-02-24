@@ -292,12 +292,12 @@ export function ThemblrApp({ initialThemeHtml = "" }: ThemblrAppProps) {
               <span className="browser-dot dot-red" />
               <span className="browser-dot dot-yellow" />
               <span className="browser-dot dot-green" />
-              <div className="browser-address">{outputView === "preview" ? "tumblr.local/preview" : result?.fileName || "theme.html"}</div>
+              <div className="browser-address">{outputView === "preview" ? "themblr.local/preview" : result?.fileName || "theme.html"}</div>
             </div>
             <div className="browser-actions">
               <div className="output-tabs">
                 <button type="button" className={outputView === "preview" ? "tab is-active" : "tab"} onClick={() => setOutputView("preview")}>
-                  Live Preview
+                  Theme Frame
                 </button>
                 <button
                   type="button"
@@ -319,7 +319,7 @@ export function ThemblrApp({ initialThemeHtml = "" }: ThemblrAppProps) {
           {outputView === "preview" ? (
             previewHtml ? (
               <iframe
-                title="Theme preview"
+                title="Theme frame"
                 className="theme-preview-frame"
                 srcDoc={previewHtml}
                 sandbox="allow-scripts allow-forms"
