@@ -90,11 +90,19 @@ function replaceAllLiteral(source: string, target: string, replacement: string):
   return source.replace(new RegExp(escapeRegExp(target), "g"), replacement);
 }
 
-function replaceFirstBalancedBlock(source: string, blockName: string, replacement: string): string {
-  const openRe = new RegExp(`\\{block:${blockName}(?:\\s[^}]*)?\\}`);
+interface BalancedBlockRange {
+  start: number;
+  end: number;
+  innerStart: number;
+  innerEnd: number;
+}
+
+function findFirstBalancedBlock(source: string, blockName: string, fromIndex = 0): BalancedBlockRange | null {
+  const openRe = new RegExp(`\\{block:${blockName}(?:\\s[^}]*)?\\}`, "g");
+  openRe.lastIndex = fromIndex;
   const open = openRe.exec(source);
   if (!open) {
-    return source;
+    return null;
   }
 
   const tokenRe = new RegExp(`\\{/?block:${blockName}(?:\\s[^}]*)?\\}`, "g");
@@ -107,11 +115,124 @@ function replaceFirstBalancedBlock(source: string, blockName: string, replacemen
 
     if (depth === 0) {
       const closeEnd = token.index + token[0].length;
-      return `${source.slice(0, open.index)}${replacement}${source.slice(closeEnd)}`;
+      return {
+        start: open.index,
+        end: closeEnd,
+        innerStart: open.index + open[0].length,
+        innerEnd: token.index,
+      };
     }
   }
 
-  return source;
+  return null;
+}
+
+function replaceFirstBalancedBlock(source: string, blockName: string, replacement: string): string {
+  const range = findFirstBalancedBlock(source, blockName);
+  if (!range) {
+    return source;
+  }
+
+  return `${source.slice(0, range.start)}${replacement}${source.slice(range.end)}`;
+}
+
+function replaceAllBalancedBlocks(source: string, blockName: string, transform: (inner: string) => string): string {
+  let html = source;
+  let cursor = 0;
+
+  while (true) {
+    const range = findFirstBalancedBlock(html, blockName, cursor);
+    if (!range) {
+      break;
+    }
+
+    const inner = html.slice(range.innerStart, range.innerEnd);
+    const replacement = transform(inner);
+    html = `${html.slice(0, range.start)}${replacement}${html.slice(range.end)}`;
+    cursor = range.start + replacement.length;
+  }
+
+  return html;
+}
+
+function applyPreviewBlockDecisions(html: string, request: GenerateRequest): string {
+  const includeBlocks = new Set<string>([
+    "Description",
+    "IfShowSidebar",
+    "IfShowSearch",
+    "IfStickyHeader",
+    "ShowHeaderImage",
+    "AskEnabled",
+    "SubmissionsEnabled",
+    "HasPages",
+    "Pages",
+    "Pagination",
+    "PreviousPage",
+    "NextPage",
+    "IfUseJumpPagination",
+    "JumpPagination",
+    "CurrentPage",
+    "JumpPage",
+    "IfShowFeaturedTags",
+    "HasFeaturedTags",
+    "FeaturedTags",
+    "IfShowFooter",
+    "IfFooterNote",
+    "IfCTALabel",
+    "IfCTAURL",
+  ]);
+
+  const excludeBlocks = new Set<string>([
+    "SearchPage",
+    "NoSearchResults",
+    "TagPage",
+    "DayPage",
+    "DayPagination",
+    "PermalinkPagination",
+    "PermalinkPage",
+    "IfShowRelatedPosts",
+    "IfRelatedPosts",
+    "RelatedPosts",
+    "IfNotUseJumpPagination",
+    "IfShowFollowing",
+    "Following",
+    "Followed",
+    "IfShowLikesWidget",
+    "Likes",
+    "NoLikes",
+    "GroupMembers",
+    "GroupMember",
+  ]);
+
+  if (!request.structured.toggles.enableMotion) {
+    includeBlocks.add("IfNotEnableMotion");
+  } else {
+    excludeBlocks.add("IfNotEnableMotion");
+  }
+
+  let output = html;
+
+  for (const blockName of includeBlocks) {
+    output = replaceAllBalancedBlocks(output, blockName, (inner) => inner);
+  }
+
+  for (const blockName of excludeBlocks) {
+    output = replaceAllBalancedBlocks(output, blockName, () => "");
+  }
+
+  return output;
+}
+
+function cleanupPreviewMarkup(html: string): string {
+  let output = html;
+  output = output.replace(/<a([^>]*)href=(['"])\2([^>]*)>\s*<\/a>/gi, "");
+  output = output.replace(/<li[^>]*>\s*<\/li>/gi, "");
+  output = output.replace(/<ul[^>]*>\s*<\/ul>/gi, "");
+  output = output.replace(/<ol[^>]*>\s*<\/ol>/gi, "");
+  output = output.replace(/<p>\s*<\/p>/gi, "");
+  output = output.replace(/\n{3,}/g, "\n\n");
+
+  return output;
 }
 
 function localizeLangKey(rawKey: string): string {
@@ -173,6 +294,14 @@ function buildReplacements(request: GenerateRequest): Array<[string, string]> {
     ["{BlogURL}", "#"],
     ["{Permalink}", "#"],
     ["{TagURL}", "#"],
+    ["{URL}", "#"],
+    ["{AskLabel}", "Ask"],
+    ["{SubmitLabel}", "Submit"],
+    ["{Label}", "Archive"],
+    ["{PageNumber}", "1"],
+    ["{CurrentPage}", "1"],
+    ["{TotalPages}", "3"],
+    ["{Tag}", "design"],
     ["{NextPage}", "#"],
     ["{PreviousPage}", "#"],
     ["{PreviousPost}", "#"],
@@ -191,6 +320,13 @@ function buildReplacements(request: GenerateRequest): Array<[string, string]> {
     ["{Submitter}", "default-era"],
     ["{SubmitterURL}", "#"],
     ["{PostAuthorName}", "Default Era"],
+    ["{FollowedName}", "default-era"],
+    ["{FollowedTitle}", "Default Era"],
+    ["{FollowedURL}", "#"],
+    ["{GroupMemberName}", "themblr-studio"],
+    ["{GroupMemberTitle}", "Themblr Studio"],
+    ["{GroupMemberURL}", "#"],
+    ["{Username}", "default-era"],
     ["{SourceTitle}", "Themblr"],
     ["{SourceURL}", "#"],
     ["{Favicon}", PREVIEW_ICON],
@@ -250,8 +386,8 @@ export function buildFakeTumblrPreviewHtml(themeHtml: string, request: GenerateR
   html = replaceFirstBalancedBlock(html, "Pagination", SAMPLE_PAGINATION);
   html = replaceFirstBalancedBlock(html, "PermalinkPagination", "");
   html = replaceFirstBalancedBlock(html, "RelatedPosts", "");
+  html = applyPreviewBlockDecisions(html, request);
 
-  html = html.replace(/\{\/?block:[^}\n]+\}/g, "");
   html = html.replace(/\{lang:([^}\n]+)\}/g, (_m: string, key: string) => localizeLangKey(key));
 
   for (const [token, replacement] of buildReplacements(request)) {
@@ -262,7 +398,9 @@ export function buildFakeTumblrPreviewHtml(themeHtml: string, request: GenerateR
   html = html.replace(/\{(?:Photoset-700|PhotoAlt)\}/g, PREVIEW_IMAGE);
   html = html.replace(/\{(?:Video-700|Video-500)\}/g, '<div class="post-media"><img src="' + PREVIEW_IMAGE + '" alt="Video placeholder"></div>');
   html = html.replace(/\{AudioEmbed\}/g, '<div class="post-media"><img src="' + PREVIEW_IMAGE + '" alt="Audio placeholder"></div>');
+  html = html.replace(/\{\/?block:[^}\n]+\}/g, "");
   html = html.replace(/\{[A-Za-z][^}\n]*\}/g, "");
+  html = cleanupPreviewMarkup(html);
 
   return addPreviewOverrides(html);
 }
