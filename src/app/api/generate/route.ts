@@ -72,6 +72,7 @@ export async function POST(request: Request) {
   const startedAt = Date.now();
   const env = getEnv();
   const path = "/api/generate";
+  const baseHeaders = { "x-request-id": requestId };
 
   try {
     const ip = getClientIp(request.headers);
@@ -79,14 +80,23 @@ export async function POST(request: Request) {
     if (!rate.allowed) {
       logRequest({ requestId, path, status: "rate_limited", durationMs: Date.now() - startedAt });
       return jsonResponse(
-        { ok: false, error: "Rate limit exceeded", resetAt: rate.resetAt },
+        { ok: false, error: "Rate limit exceeded", resetAt: rate.resetAt, requestId },
         429,
-        { "x-ratelimit-remaining": String(rate.remaining) },
+        { ...baseHeaders, "x-ratelimit-remaining": String(rate.remaining) },
       );
     }
 
     const rawBody = await parseJsonWithGuard<unknown>(request);
-    const body = GenerateRequestSchema.parse(rawBody);
+    const parsedBody = GenerateRequestSchema.safeParse(rawBody);
+    if (!parsedBody.success) {
+      return jsonResponse(
+        { ok: false, error: "Invalid request schema", requestId },
+        400,
+        baseHeaders,
+      );
+    }
+
+    const body = parsedBody.data;
     enforcePromptLimit(body.prompt);
 
     const bundle = await loadStarterTemplate();
@@ -104,24 +114,21 @@ export async function POST(request: Request) {
     });
 
     return jsonResponse(result, status, {
+      ...baseHeaders,
       "x-ratelimit-remaining": String(rate.remaining),
     });
   } catch (error) {
     logError(requestId, path, error);
 
     if (error instanceof RequestGuardError) {
-      return jsonResponse({ ok: false, error: error.message }, error.status);
-    }
-
-    if (error instanceof Error && error.name === "ZodError") {
-      return jsonResponse({ ok: false, error: "Invalid request schema" }, 400);
+      return jsonResponse({ ok: false, error: error.message, requestId }, error.status, baseHeaders);
     }
 
     const mappedError = mapGenerateError(error);
     if (mappedError) {
-      return jsonResponse({ ok: false, error: mappedError.message }, mappedError.status);
+      return jsonResponse({ ok: false, error: mappedError.message, requestId }, mappedError.status, baseHeaders);
     }
 
-    return jsonResponse({ ok: false, error: "Internal server error" }, 500);
+    return jsonResponse({ ok: false, error: "Internal server error", requestId }, 500, baseHeaders);
   }
 }

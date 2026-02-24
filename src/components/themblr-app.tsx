@@ -121,10 +121,38 @@ export function ThemblrApp({ initialThemeHtml = "" }: ThemblrAppProps) {
         body: JSON.stringify(payload),
       });
 
-      const responsePayload = await response.json();
+      const requestId =
+        response.headers && typeof response.headers.get === "function"
+          ? response.headers.get("x-request-id")
+          : null;
+      const rawBody =
+        typeof (response as { text?: unknown }).text === "function"
+          ? await response.text()
+          : JSON.stringify(await response.json());
+      let responsePayload: unknown;
 
-      if (!response.ok && !responsePayload?.validation) {
-        throw new Error(responsePayload?.error || "Generation failed");
+      try {
+        responsePayload = rawBody ? JSON.parse(rawBody) : null;
+      } catch {
+        responsePayload = null;
+      }
+
+      const hasValidationPayload =
+        responsePayload !== null &&
+        typeof responsePayload === "object" &&
+        Object.prototype.hasOwnProperty.call(responsePayload, "validation");
+
+      if (!response.ok && !hasValidationPayload) {
+        const payloadError =
+          responsePayload && typeof responsePayload === "object" && "error" in responsePayload
+            ? (responsePayload as { error?: unknown }).error
+            : undefined;
+        const message =
+          typeof payloadError === "string" && payloadError.trim().length > 0
+            ? payloadError
+            : `Generation failed with HTTP ${response.status}`;
+
+        throw new Error(requestId ? `${message} (request: ${requestId})` : message);
       }
 
       const parsed = GenerateResponseSchema.parse(responsePayload);
@@ -254,7 +282,7 @@ export function ThemblrApp({ initialThemeHtml = "" }: ThemblrAppProps) {
                 title="Theme preview"
                 className="theme-preview-frame"
                 srcDoc={previewHtml}
-                sandbox=""
+                sandbox="allow-scripts allow-forms"
               />
             ) : (
               <p className="preview-note">Preview unavailable. Check starter template path in environment.</p>

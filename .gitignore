@@ -4,6 +4,7 @@ node_modules/
 # next.js build output
 .next/
 out/
+*.tsbuildinfo
 
 # tests and coverage
 coverage/
